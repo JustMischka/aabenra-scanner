@@ -1,0 +1,29 @@
+name: Aabenra Termin Checker
+
+on:
+  schedule:
+    # Läuft automatisch alle 10 Minuten rund um die Uhr
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Ermöglicht den manuellen Test-Start per Klick
+
+jobs:
+  run-checker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4
+
+      - name: Run script
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python checker.py
