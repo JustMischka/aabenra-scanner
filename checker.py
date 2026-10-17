@@ -9,6 +9,9 @@ URL = "HIER_DIE_EXAKTE_URL_DES_STANDISAMTS_EINTRAGEN"
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 HASH_FILE = "last_hash.txt"
 
+# SCHALTER: True = Sendet nach JEDER Prüfung eine Statusnachricht, False = Nur bei Änderungen
+SEND_DEBUG_MESSAGE = True
+
 
 def send_discord_message(message):
   if not DISCORD_WEBHOOK_URL:
@@ -31,32 +34,33 @@ def check_site():
   try:
     response = requests.get(URL, headers=headers, timeout=15)
     if response.status_code != 200:
-      print(f"Fehler: Webseite antwortet mit Status {response.status_code}")
+      error_msg = (
+          "⚠️ **Achtung! Standesamt-Seite antwortet mit Fehler:**"
+          f" {response.status_code}"
+      )
+      print(error_msg)
+      if SEND_DEBUG_MESSAGE:
+        send_discord_message(error_msg)
       return
 
     soup = BeautifulSoup(response.text, "html.parser")
+    content = str(soup)  # Überwacht die gesamte Seite
 
-    # WICHTIG: Hier kannst du den Bereich eingrenzen (z.B. den Haupt-Container der Seite),
-    # damit nicht wegen jeder kleinen Werbe-Änderung oder Uhrzeit in der Fußzeile Alarm geschlagen wird.
-    # Wenn du die gesamte Seite willst, nimm einfach: content = str(soup)
-    # Beispiel mit Container (suche im Browser nach der ID des Kalender-Bereichs, z.B. id="booking-container"):
-    # target_area = soup.find("div", {"id": "booking-container"})
-    # content = str(target_area) if target_area else str(soup)
-
-    content = str(soup)  # Überwacht standardmäßig die gesamte Seite
-
-    # Erstelle einen eindeutigen Hash (Prüfsumme) vom aktuellen Inhalt
+    # Erstelle einen Hash vom aktuellen Inhalt
     current_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
 
-    # Lade den alten Hash, falls die Datei existiert
+    # Lade den alten Hash, falls vorhanden
     old_hash = ""
     if os.path.exists(HASH_FILE):
       with open(HASH_FILE, "r") as f:
         old_hash = f.read().strip()
 
+    # Immer-Nachricht senden, falls aktiviert
+    if SEND_DEBUG_MESSAGE:
+      send_discord_message("-------------------Seite wird geprüft------------------")
+
     # Vergleiche alt und neu
     if old_hash == "":
-      # Erster Lauf: Speichere den Hash einfach ab, ohne Alarm zu schlagen
       print(
           "Erster Lauf: Initialer Hash gespeichert. Überwachung aktiv ab dem"
           " nächsten Mal."
@@ -65,21 +69,22 @@ def check_site():
         f.write(current_hash)
 
     elif current_hash != old_hash:
-      # ÄNDERUNG ERKANNT!
       print("Änderung auf der Webseite festgestellt!")
       send_discord_message(
           "🚨 **Achtung! Es gab eine Änderung auf der Standesamt-Seite von"
           f" Aabenra!**\nPrüfe die Seite sofort: {URL}"
       )
-
-      # Speichere den neuen Hash für zukünftige Vergleiche
+      # Speichere den neuen Hash
       with open(HASH_FILE, "w") as f:
         f.write(current_hash)
     else:
       print("Keine Änderung der Webseite.")
 
   except Exception as e:
-    print(f"Ein Fehler ist aufgetreten: {e}")
+    exception_msg = f"❌ Ein Fehler ist aufgetreten: {e}"
+    print(exception_msg)
+    if SEND_DEBUG_MESSAGE:
+      send_discord_message(exception_msg)
 
 
 if __name__ == "__main__":
