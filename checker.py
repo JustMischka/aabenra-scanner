@@ -4,7 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 
 # URL der Standesamt-Buchungsseite von Aabenra eintragen
-URL = "HIER_DIE_EXAKTE_URL_DES_STANDISAMTS_EINTRAGEN"
+URL = "https://reservation.frontdesksuite.com/aabenraavielse/vielse/ReserveTime/TimeSelection?pageId=9ac8c849-d203-47e2-94a1-173c7f471237&buttonId=cbe0127a-39ce-470f-8c86-26d8eab05e48&culture=de"
 
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 HASH_FILE = "last_hash.txt"
