@@ -30,8 +30,8 @@ jobs:
         run: |
           python checker.py
 
-      - name: Save new hash if changed
+      - name: Save new state if changed
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: 'Update page hash [skip ci]'
-          file_pattern: last_hash.txt
+          commit_message: 'Update calendar state [skip ci]'
+          file_pattern: last_state.json
