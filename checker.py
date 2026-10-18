@@ -1,10 +1,10 @@
 import hashlib
 import os
-import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
-# URL der Standesamt-Buchungsseite von Aabenra eintragen
-URL = "https://reservation.frontdesksuite.com/aabenraavielse/vielse/ReserveTime/TimeSelection?pageId=9ac8c849-d203-47e2-94a1-173c7f471237&buttonId=cbe0127a-39ce-470f-8c86-26d8eab05e48&culture=de"
+# Die Startseite des Standesamts Aabenra
+START_URL = "https://reservation.frontdesksuite.com/aabenraavielse/vielse/Home/Index?pageid=9ac8c849-d203-47e2-94a1-173c7f471237&culture=de&uiculture=de"
 
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 HASH_FILE = "last_hash.txt"
@@ -17,6 +17,8 @@ def send_discord_message(message):
   if not DISCORD_WEBHOOK_URL:
     print("Discord Webhook URL fehlt!")
     return
+  import requests
+
   payload = {"content": message}
   response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
   if response.status_code != 204:
@@ -24,61 +26,76 @@ def send_discord_message(message):
 
 
 def check_site():
-  headers = {
-      "User-Agent": (
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,"
-          " like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      )
-  }
-
   try:
-    response = requests.get(URL, headers=headers, timeout=15)
-    if response.status_code != 200:
-      error_msg = (
-          "⚠️ **Achtung! Standesamt-Seite antwortet mit Fehler:**"
-          f" {response.status_code}"
+    with sync_playwright() as p:
+      # Startet einen unsichtbaren Browser
+      browser = p.chromium.launch(headless=True)
+      page = browser.new_page()
+
+      print(f"Öffne Startseite: {START_URL}")
+      page.goto(START_URL, timeout=30000)
+
+      # Suche und klicke auf den Button "Ja - wir bringen unsere eigenen Trauzeugen mit"
+      # Wir suchen hier nach dem Text im Button
+      print("Suche nach dem Trauzeugen-Button...")
+      button = page.get_by_text(
+          "Ja - wir bringen unsere eigenen Trauzeugen mit"
       )
-      print(error_msg)
+
+      if button.count() > 0:
+        button.first.click()
+        # Warte, bis die Zielseite nach dem Klick geladen ist
+        page.wait_for_load_state("networkidle")
+        print("Erfolgreich geklickt, auf Zielseite angekommen.")
+      else:
+        print(
+            "Warnung: Trauzeugen-Button nicht gefunden. Versuche Seite direkt"
+            " zu überwachen."
+        )
+
+      # Aktuelle URL der Zielseite holen
+      current_url = page.url
+      print(f"Überwache Ziel-URL: {current_url}")
+
+      # HTML der Zielseite auslesen
+      html_content = page.content()
+      browser.close()
+
+      soup = BeautifulSoup(html_content, "html.parser")
+      content = str(soup)
+
+      # Erstelle einen Hash vom aktuellen Inhalt der Zielseite
+      current_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
+
+      # Lade den alten Hash, falls vorhanden
+      old_hash = ""
+      if os.path.exists(HASH_FILE):
+        with open(HASH_FILE, "r") as f:
+          old_hash = f.read().strip()
+
+      # Immer-Nachricht senden, falls aktiviert
       if SEND_DEBUG_MESSAGE:
-        send_discord_message(error_msg)
-      return
+        send_discord_message("-------------------Seite wird geprüft------------------")
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    content = str(soup)  # Überwacht die gesamte Seite
+      # Vergleiche alt und neu
+      if old_hash == "":
+        print(
+            "Erster Lauf: Initialer Hash gespeichert. Überwachung aktiv ab dem"
+            " nächsten Mal."
+        )
+        with open(HASH_FILE, "w") as f:
+          f.write(current_hash)
 
-    # Erstelle einen Hash vom aktuellen Inhalt
-    current_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
-
-    # Lade den alten Hash, falls vorhanden
-    old_hash = ""
-    if os.path.exists(HASH_FILE):
-      with open(HASH_FILE, "r") as f:
-        old_hash = f.read().strip()
-
-    # Immer-Nachricht senden, falls aktiviert
-    if SEND_DEBUG_MESSAGE:
-      send_discord_message("-------------------Seite wird geprüft------------------")
-
-    # Vergleiche alt und neu
-    if old_hash == "":
-      print(
-          "Erster Lauf: Initialer Hash gespeichert. Überwachung aktiv ab dem"
-          " nächsten Mal."
-      )
-      with open(HASH_FILE, "w") as f:
-        f.write(current_hash)
-
-    elif current_hash != old_hash:
-      print("Änderung auf der Webseite festgestellt!")
-      send_discord_message(
-          "🚨 **Achtung! Es gab eine Änderung auf der Standesamt-Seite von"
-          f" Aabenra!**\nPrüfe die Seite sofort: {URL}"
-      )
-      # Speichere den neuen Hash
-      with open(HASH_FILE, "w") as f:
-        f.write(current_hash)
-    else:
-      print("Keine Änderung der Webseite.")
+      elif current_hash != old_hash:
+        print("Änderung auf der Zielseite festgestellt!")
+        send_discord_message(
+            "🚨 **Achtung! Es gab eine Änderung auf der Standesamt-Zielseite von"
+            f" Aabenra!**\nPrüfe die Seite sofort: {current_url}"
+        )
+        with open(HASH_FILE, "w") as f:
+          f.write(current_hash)
+      else:
+        print("Keine Änderung der Zielseite.")
 
   except Exception as e:
     exception_msg = f"❌ Ein Fehler ist aufgetreten: {e}"
