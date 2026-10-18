@@ -2,15 +2,14 @@ name: Aabenra Termin Checker
 
 on:
   schedule:
-    # Läuft automatisch alle 10 Minuten rund um die Uhr
     - cron: '*/10 * * * *'
-  workflow_dispatch: # Ermöglicht den manuellen Test-Start per Klick
+  workflow_dispatch:
 
 jobs:
   run-checker:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Erlaubt dem Skript, den Hash-Stand im Repo zu speichern
+      contents: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -22,7 +21,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4
+          pip install requests beautifulsoup4 playwright
+          playwright install chromium
 
       - name: Run script
         env:
